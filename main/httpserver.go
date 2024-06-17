@@ -10,6 +10,8 @@ import (
 	"github.com/llr104/slgserver/server/httpserver/controller"
 )
 
+const httpServer string = "httpserver"
+
 func main() {
 
 	db.TestDB()
@@ -24,7 +26,7 @@ func main() {
 }
 
 func getHttpAddr() string {
-	host := config.File.MustValue("httpserver", "host", "")
-	port := config.File.MustValue("httpserver", "port", "8088")
+	host := config.File.MustValue(httpServer, "host", "")
+	port := config.File.MustValue(httpServer, "port", "8088")
 	return host + ":" + port
 }
