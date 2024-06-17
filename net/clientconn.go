@@ -16,23 +16,23 @@ import (
 	"go.uber.org/zap"
 )
 
-// 客户端连接
+// ClientConn 客户端websocket连接[会话]
+// -- 保存时自动格式化，跟随换行/注释等调整为最合适的对齐方式
 type ClientConn struct {
-	wsSocket   		*websocket.Conn // 底层websocket
-	isClosed   		bool
-	Seq				int64
-	onClose    		func(conn*ClientConn)
-	onPush    		func(conn*ClientConn, body*RspBody)
-	//链接属性
-	property 		map[string]interface{}
-	//保护链接属性修改的锁
-	propertyLock  	sync.RWMutex
-	syncCtxs      	map[int64]*syncCtx
-	syncLock      	sync.RWMutex
-	handshakeChan 	chan bool
-	handshake		bool
+	wsSocket      *websocket.Conn                       // 底层websocket
+	isClosed      bool                                  // 是否关闭
+	Seq           int64                                 // 顺序号
+	onClose       func(conn *ClientConn)                // 连接关闭处理
+	onPush        func(conn *ClientConn, body *RspBody) // 推送数据处理
+	property      map[string]interface{}                // 连接属性
+	propertyLock  sync.RWMutex                          // 连接属性修改锁
+	syncCtxs      map[int64]*syncCtx                    // 上下文
+	syncLock      sync.RWMutex                          // 上下文锁
+	handshakeChan chan bool                             // 握手chan
+	handshake     bool                                  // 是否握手
 }
 
+// NewClientConn 创建一个新的连接
 func NewClientConn(wsSocket *websocket.Conn) *ClientConn {
 	conn := &ClientConn{
 		wsSocket:      wsSocket,
@@ -42,20 +42,22 @@ func NewClientConn(wsSocket *websocket.Conn) *ClientConn {
 		syncCtxs:      make(map[int64]*syncCtx),
 		handshakeChan: make(chan bool),
 	}
-
 	return conn
 }
 
-func (this *ClientConn) waitHandshake() bool{
-	if this.handshake == false{
+// 等待握手
+func (this *ClientConn) waitHandshake() bool {
+	if this.handshake == false {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		select {
-			case _ = <-this.handshakeChan:{
+		case _ = <-this.handshakeChan:
+			{
 				log.DefaultLog.Info("recv handshakeChan")
 				return true
 			}
-			case <-ctx.Done():{
+		case <-ctx.Done():
+			{
 				log.DefaultLog.Info("recv handshakeChan timeout")
 				return false
 			}
@@ -64,22 +66,26 @@ func (this *ClientConn) waitHandshake() bool{
 	return true
 }
 
-func (this *ClientConn)	Start() bool{
+// Start 开启一个连接
+func (this *ClientConn) Start() bool {
 	this.handshake = false
 	go this.wsReadLoop()
 	return this.waitHandshake()
 }
 
-func (this *ClientConn) Addr() string  {
+// Addr 获取连接远端地址
+func (this *ClientConn) Addr() string {
 	return this.wsSocket.RemoteAddr().String()
 }
 
+// Push 推送数据
 func (this *ClientConn) Push(name string, data interface{}) {
 	rsp := &WsMsgRsp{Body: &RspBody{Name: name, Msg: data, Seq: 0}}
 	this.write(rsp.Body)
 }
 
-func (this *ClientConn) Send(name string, data interface{}) *RspBody{
+// Send 发送数据并等待结果
+func (this *ClientConn) Send(name string, data interface{}) *RspBody {
 	this.syncLock.Lock()
 	sync := newSyncCtx()
 	this.Seq += 1
@@ -88,15 +94,15 @@ func (this *ClientConn) Send(name string, data interface{}) *RspBody{
 	this.syncCtxs[this.Seq] = sync
 	this.syncLock.Unlock()
 
-	rsp := &RspBody{Code: constant.OK, Name: name, Seq: seq }
+	rsp := &RspBody{Code: constant.OK, Name: name, Seq: seq}
 	err := this.write(req)
-	if err != nil{
+	if err != nil {
 		sync.cancel()
-	}else{
+	} else {
 		r := sync.wait()
-		if r == nil{
+		if r == nil {
 			rsp.Code = constant.ProxyConnectError
-		}else{
+		} else {
 			rsp = r
 		}
 	}
@@ -108,6 +114,7 @@ func (this *ClientConn) Send(name string, data interface{}) *RspBody{
 	return rsp
 }
 
+// 循环读取
 func (this *ClientConn) wsReadLoop() {
 	defer func() {
 		if err := recover(); err != nil {
@@ -137,46 +144,46 @@ func (this *ClientConn) wsReadLoop() {
 			d, err := util.AesCBCDecrypt(data, []byte(key), []byte(key), openssl.ZEROS_PADDING)
 			if err != nil {
 				log.DefaultLog.Error("AesDecrypt error", zap.Error(err))
-			}else{
+			} else {
 				data = d
 			}
 		}
 
 		if err := util.Unmarshal(data, body); err == nil {
 			if body.Seq == 0 {
-				if body.Name == HandshakeMsg{
+				if body.Name == HandshakeMsg {
 					h := Handshake{}
 					mapstructure.Decode(body.Msg, &h)
 					log.DefaultLog.Info("client 收到握手协议", zap.String("data", string(data)))
-					if h.Key != ""{
+					if h.Key != "" {
 						this.SetProperty("secretKey", h.Key)
-					}else{
+					} else {
 						this.RemoveProperty("secretKey")
 					}
 					this.handshake = true
 					this.handshakeChan <- true
-				}else{
+				} else {
 					//推送，需要推送到指定的代理连接
-					if this.onPush != nil{
+					if this.onPush != nil {
 						this.onPush(this, body)
-					}else{
+					} else {
 						log.DefaultLog.Warn("clientconn not deal push")
 					}
 				}
-			}else{
+			} else {
 				this.syncLock.RLock()
 				s, ok := this.syncCtxs[body.Seq]
 				this.syncLock.RUnlock()
 				if ok {
 					s.outChan <- body
-				}else{
+				} else {
 					log.DefaultLog.Warn("seq not found sync",
 						zap.Int64("seq", body.Seq),
 						zap.String("msgName", body.Name))
 				}
 			}
 
-		}else{
+		} else {
 			log.DefaultLog.Error("wsReadLoop Unmarshal error", zap.Error(err))
 		}
 	}
@@ -184,42 +191,42 @@ func (this *ClientConn) wsReadLoop() {
 	this.Close()
 }
 
-
-func (this *ClientConn) write(msg interface{}) error{
+func (this *ClientConn) write(msg interface{}) error {
 	data, err := util.Marshal(msg)
 	if err == nil {
-		if secretKey, err:= this.GetProperty("secretKey"); err == nil {
+		if secretKey, err := this.GetProperty("secretKey"); err == nil {
 			key := secretKey.(string)
 			log.DefaultLog.Info("secretKey", zap.String("secretKey", key))
 			data, _ = util.AesCBCEncrypt(data, []byte(key), []byte(key), openssl.ZEROS_PADDING)
 		}
-	}else {
+	} else {
 		log.DefaultLog.Error("wsWriteLoop Marshal body error", zap.Error(err))
 		return err
 	}
 
-	if data, err := util.Zip(data); err == nil{
+	if data, err := util.Zip(data); err == nil {
 		if err := this.wsSocket.WriteMessage(websocket.BinaryMessage, data); err != nil {
 			this.Close()
 			return err
 		}
-	}else{
+	} else {
 		return err
 	}
 	return nil
 }
 
+// Close 关闭连接
 func (this *ClientConn) Close() {
 	this.wsSocket.Close()
 	if !this.isClosed {
 		this.isClosed = true
-		if this.onClose != nil{
+		if this.onClose != nil {
 			this.onClose(this)
 		}
 	}
 }
 
-//设置链接属性
+// SetProperty 设置连接属性
 func (this *ClientConn) SetProperty(key string, value interface{}) {
 	this.propertyLock.Lock()
 	defer this.propertyLock.Unlock()
@@ -227,7 +234,7 @@ func (this *ClientConn) SetProperty(key string, value interface{}) {
 	this.property[key] = value
 }
 
-//获取链接属性
+// GetProperty 获取连接属性
 func (this *ClientConn) GetProperty(key string) (interface{}, error) {
 	this.propertyLock.RLock()
 	defer this.propertyLock.RUnlock()
@@ -239,7 +246,7 @@ func (this *ClientConn) GetProperty(key string) (interface{}, error) {
 	}
 }
 
-//移除链接属性
+// RemoveProperty 移除连接属性
 func (this *ClientConn) RemoveProperty(key string) {
 	this.propertyLock.Lock()
 	defer this.propertyLock.Unlock()
@@ -247,10 +254,10 @@ func (this *ClientConn) RemoveProperty(key string) {
 	delete(this.property, key)
 }
 
-func (this *ClientConn) SetOnClose(hookFunc func (*ClientConn))  {
+func (this *ClientConn) SetOnClose(hookFunc func(*ClientConn)) {
 	this.onClose = hookFunc
 }
 
-func (this *ClientConn) SetOnPush(hookFunc func (*ClientConn, *RspBody))  {
+func (this *ClientConn) SetOnPush(hookFunc func(*ClientConn, *RspBody)) {
 	this.onPush = hookFunc
 }
