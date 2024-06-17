@@ -12,7 +12,7 @@ require (
 	github.com/labstack/echo/v4 v4.12.0
 	github.com/smartystreets/goconvey v1.8.1 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
-	go.uber.org/zap v1.17.0
+	go.uber.org/zap v1.27.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	xorm.io/xorm v1.3.9
 )
