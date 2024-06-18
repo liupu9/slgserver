@@ -11,26 +11,26 @@ type HandlerFunc func(req *WsMsgReq, rsp *WsMsgRsp)
 type MiddlewareFunc func(HandlerFunc) HandlerFunc
 
 type Group struct {
-	prefix     	string
-	hMap       	map[string]HandlerFunc
-	hMapMidd	map[string][]MiddlewareFunc
-	middleware 	[]MiddlewareFunc
+	prefix     string                      // 前缀
+	hMap       map[string]HandlerFunc      // 消息处理器
+	hMapMidd   map[string][]MiddlewareFunc // 中间件处理器
+	middleware []MiddlewareFunc            // 中间件
 }
 
-func (this*Group) AddRouter(name string, handlerFunc HandlerFunc, middleware ...MiddlewareFunc) {
+func (this *Group) AddRouter(name string, handlerFunc HandlerFunc, middleware ...MiddlewareFunc) {
 	this.hMap[name] = handlerFunc
 	this.hMapMidd[name] = middleware
 }
 
-func (this* Group) Use(middleware ...MiddlewareFunc) *Group{
+func (this *Group) Use(middleware ...MiddlewareFunc) *Group {
 	this.middleware = append(this.middleware, middleware...)
 	return this
 }
 
-func (this*Group) applyMiddleware(name string) HandlerFunc {
+func (this *Group) applyMiddleware(name string) HandlerFunc {
 
 	h, ok := this.hMap[name]
-	if ok == false{
+	if ok == false {
 		//通配符
 		h, ok = this.hMap["*"]
 	}
@@ -48,24 +48,23 @@ func (this*Group) applyMiddleware(name string) HandlerFunc {
 	return h
 }
 
-
-func (this*Group) exec(name string, req *WsMsgReq, rsp *WsMsgRsp){
+func (this *Group) exec(name string, req *WsMsgReq, rsp *WsMsgRsp) {
 	h := this.applyMiddleware(name)
 	if h == nil {
 		log.DefaultLog.Warn("Group has not",
 			zap.String("msgName", req.Body.Name))
-	}else{
+	} else {
 		h(req, rsp)
 	}
 }
 
 type Router struct {
-	groups[] *Group
+	groups []*Group
 }
 
-func (this*Router) Group(prefix string) *Group{
+func (this *Router) Group(prefix string) *Group {
 	g := &Group{prefix: prefix,
-		hMap: make(map[string]HandlerFunc),
+		hMap:     make(map[string]HandlerFunc),
 		hMapMidd: make(map[string][]MiddlewareFunc),
 	}
 
@@ -73,20 +72,20 @@ func (this*Router) Group(prefix string) *Group{
 	return g
 }
 
-func (this*Router) Run(req *WsMsgReq, rsp *WsMsgRsp) {
+func (this *Router) Run(req *WsMsgReq, rsp *WsMsgRsp) {
 	name := req.Body.Name
 	msgName := name
 	sArr := strings.Split(name, ".")
 	prefix := ""
-	if len(sArr) == 2{
+	if len(sArr) == 2 {
 		prefix = sArr[0]
 		msgName = sArr[1]
 	}
 
 	for _, g := range this.groups {
-		if g.prefix == prefix{
+		if g.prefix == prefix {
 			g.exec(msgName, req, rsp)
-		}else if g.prefix == "*" {
+		} else if g.prefix == "*" {
 			g.exec(msgName, req, rsp)
 		}
 	}
