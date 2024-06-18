@@ -10,7 +10,7 @@ import (
 	"github.com/llr104/slgserver/log"
 	"github.com/llr104/slgserver/middleware"
 	"github.com/llr104/slgserver/net"
-	chat_proto "github.com/llr104/slgserver/server/chatserver/proto"
+	chatproto "github.com/llr104/slgserver/server/chatserver/proto"
 	"github.com/llr104/slgserver/server/slgserver/proto"
 	"go.uber.org/zap"
 )
@@ -19,23 +19,24 @@ var GHandle = Handle{
 	proxys: make(map[string]map[int64]*net.ProxyClient),
 }
 
+// Handle 网关处理器
 type Handle struct {
-	proxyMutex sync.Mutex
-	proxys     map[string]map[int64]*net.ProxyClient
-	slgProxy   string
-	chatProxy  string
-	loginProxy string
+	proxyMutex sync.Mutex                            // 锁
+	proxys     map[string]map[int64]*net.ProxyClient // map: key -> int64 -> 网关连接（代理）
+	slgProxy   string                                // 游戏服代理地址
+	chatProxy  string                                // 聊天服代理地址
+	loginProxy string                                // 登录服代理地址
 }
 
 func isAccount(msgName string) bool {
 	sArr := strings.Split(msgName, ".")
 	prefix := ""
-	if len(sArr) == 2{
+	if len(sArr) == 2 {
 		prefix = sArr[0]
 	}
-	if prefix == "account"{
+	if prefix == "account" {
 		return true
-	}else{
+	} else {
 		return false
 	}
 }
@@ -43,40 +44,40 @@ func isAccount(msgName string) bool {
 func isChat(msgName string) bool {
 	sArr := strings.Split(msgName, ".")
 	prefix := ""
-	if len(sArr) == 2{
+	if len(sArr) == 2 {
 		prefix = sArr[0]
 	}
-	if prefix == "chat"{
+	if prefix == "chat" {
 		return true
-	}else{
+	} else {
 		return false
 	}
 }
 
-
-
-func (this*Handle) InitRouter(r *net.Router) {
+// InitRouter 初始化路由
+func (this *Handle) InitRouter(r *net.Router) {
 	this.init()
 	g := r.Group("*").Use(middleware.ElapsedTime(), middleware.Log())
+	// 通用消息处理器
 	g.AddRouter("*", this.all)
 }
 
-func (this*Handle) init() {
+func (this *Handle) init() {
 	this.slgProxy = config.File.MustValue("gateserver", "slg_proxy", "ws://127.0.0.1:8001")
 	this.chatProxy = config.File.MustValue("gateserver", "chat_proxy", "ws://127.0.0.1:8002")
 	this.loginProxy = config.File.MustValue("gateserver", "login_proxy", "ws://127.0.0.1:8003")
 }
 
-func (this*Handle) onPush(conn *net.ClientConn, body *net.RspBody) {
+func (this *Handle) onPush(conn *net.ClientConn, body *net.RspBody) {
 	gc, err := conn.GetProperty("gateConn")
-	if err != nil{
+	if err != nil {
 		return
 	}
 	gateConn := gc.(net.WSConn)
 	gateConn.Push(body.Name, body.Msg)
 }
 
-func (this*Handle) onProxyClose(conn *net.ClientConn) {
+func (this *Handle) onProxyClose(conn *net.ClientConn) {
 	p, err := conn.GetProperty("proxy")
 	if err == nil {
 		proxyStr := p.(string)
@@ -84,7 +85,7 @@ func (this*Handle) onProxyClose(conn *net.ClientConn) {
 		_, ok := this.proxys[proxyStr]
 		if ok {
 			c, err := conn.GetProperty("cid")
-			if err == nil{
+			if err == nil {
 				cid := c.(int64)
 				delete(this.proxys[proxyStr], cid)
 			}
@@ -93,11 +94,11 @@ func (this*Handle) onProxyClose(conn *net.ClientConn) {
 	}
 }
 
-func (this*Handle) OnServerConnClose (conn net.WSConn){
+func (this *Handle) OnServerConnClose(conn net.WSConn) {
 	c, err := conn.GetProperty("cid")
 	arr := make([]*net.ProxyClient, 0)
 
-	if err == nil{
+	if err == nil {
 		cid := c.(int64)
 		this.proxyMutex.Lock()
 		for _, m := range this.proxys {
@@ -116,20 +117,22 @@ func (this*Handle) OnServerConnClose (conn net.WSConn){
 
 }
 
-func (this*Handle) all(req *net.WsMsgReq, rsp *net.WsMsgRsp) {
+// all 通用消息处理器
+func (this *Handle) all(req *net.WsMsgReq, rsp *net.WsMsgRsp) {
 	log.DefaultLog.Info("gateserver handle all begin",
 		zap.String("proxyStr", req.Body.Proxy),
 		zap.String("msgName", req.Body.Name))
 	this.deal(req, rsp)
 
-	if req.Body.Name == "role.enterServer" && rsp.Body.Code == constant.OK  {
+	// 后续处理
+	if req.Body.Name == "role.enterServer" && rsp.Body.Code == constant.OK {
 		//登录聊天服
 		rspObj := &proto.EnterServerRsp{}
 		mapstructure.Decode(rsp.Body.Msg, rspObj)
-		r := &chat_proto.LoginReq{RId: rspObj.Role.RId, NickName: rspObj.Role.NickName, Token: rspObj.Token}
+		r := &chatproto.LoginReq{RId: rspObj.Role.RId, NickName: rspObj.Role.NickName, Token: rspObj.Token}
 		reqBody := &net.ReqBody{Seq: 0, Name: "chat.login", Msg: r, Proxy: ""}
 		rspBody := &net.RspBody{Seq: 0, Name: "chat.login", Msg: r, Code: 0}
-		this.deal(&net.WsMsgReq{Body: reqBody, Conn:req.Conn}, &net.WsMsgRsp{Body: rspBody})
+		this.deal(&net.WsMsgReq{Body: reqBody, Conn: req.Conn}, &net.WsMsgRsp{Body: rspBody})
 	}
 
 	log.DefaultLog.Info("gateserver handle all end",
@@ -137,22 +140,24 @@ func (this*Handle) all(req *net.WsMsgReq, rsp *net.WsMsgRsp) {
 		zap.String("msgName", req.Body.Name))
 }
 
-func (this*Handle) deal(req *net.WsMsgReq, rsp *net.WsMsgRsp) {
-	//协议转发
+// 处理
+func (this *Handle) deal(req *net.WsMsgReq, rsp *net.WsMsgRsp) {
+	// 根据协议名转发
 	proxyStr := req.Body.Proxy
-	if isAccount(req.Body.Name){
+	if isAccount(req.Body.Name) {
 		proxyStr = this.loginProxy
-	}else if isChat(req.Body.Name){
+	} else if isChat(req.Body.Name) {
 		proxyStr = this.chatProxy
-	} else{
+	} else {
 		proxyStr = this.slgProxy
 	}
 
-	if proxyStr == ""{
+	if proxyStr == "" {
 		rsp.Body.Code = constant.ProxyNotInConnect
 		return
 	}
 
+	// 根据proxyStr和cid获取连接
 	this.proxyMutex.Lock()
 	_, ok := this.proxys[proxyStr]
 	if ok == false {
@@ -163,9 +168,11 @@ func (this*Handle) deal(req *net.WsMsgReq, rsp *net.WsMsgRsp) {
 	var proxy *net.ProxyClient
 	d, _ := req.Conn.GetProperty("cid")
 	cid := d.(int64)
+	// 获取连接
 	proxy, ok = this.proxys[proxyStr][cid]
 	this.proxyMutex.Unlock()
 
+	// 连接不存在
 	if ok == false {
 		proxy = net.NewProxyClient(proxyStr)
 
@@ -175,7 +182,7 @@ func (this*Handle) deal(req *net.WsMsgReq, rsp *net.WsMsgRsp) {
 
 		//发起链接,这里是阻塞的，所以不要上锁
 		err = proxy.Connect()
-		if err == nil{
+		if err == nil {
 			proxy.SetProperty("cid", cid)
 			proxy.SetProperty("proxy", proxyStr)
 			proxy.SetProperty("gateConn", req.Conn)
@@ -192,16 +199,17 @@ func (this*Handle) deal(req *net.WsMsgReq, rsp *net.WsMsgRsp) {
 		return
 	}
 
+	//设置seq和name
 	rsp.Body.Seq = req.Body.Seq
 	rsp.Body.Name = req.Body.Name
 
+	//发送
 	r, err := proxy.Send(req.Body.Name, req.Body.Msg)
-	if err == nil{
+	if err == nil {
 		rsp.Body.Code = r.Code
 		rsp.Body.Msg = r.Msg
-	}else{
+	} else {
 		rsp.Body.Code = constant.ProxyConnectError
 		rsp.Body.Msg = nil
 	}
 }
-
