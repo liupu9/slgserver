@@ -2,6 +2,8 @@ package global
 
 import "github.com/llr104/slgserver/config"
 
+// 定义全局变量
+
 var MapWith = 200
 var MapHeight = 200
 

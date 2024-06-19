@@ -16,38 +16,37 @@ var wsUpgrader = websocket.Upgrader{
 	},
 }
 
-
+// server 服务器
 type server struct {
-	addr		string
-	router		*Router
-	needSecret 	bool
-	beforeClose func (WSConn)
+	addr        string       // 地址
+	router      *Router      // 路由
+	needSecret  bool         // 是否密钥
+	beforeClose func(WSConn) //
 }
 
 func NewServer(addr string, needSecret bool) *server {
 	s := server{
-		addr: addr,
+		addr:       addr,
 		needSecret: needSecret,
 	}
 	return &s
 }
 
-func (this*server) Router(router *Router) {
+func (this *server) Router(router *Router) {
 	this.router = router
 }
 
-
-func (this*server) Start()  {
+func (this *server) Start() {
 	log.DefaultLog.Info("server starting")
 	http.HandleFunc("/", this.wsHandler)
 	http.ListenAndServe(this.addr, nil)
 }
 
-func (this*server) SetOnBeforeClose(hookFunc func (WSConn))  {
+func (this *server) SetOnBeforeClose(hookFunc func(WSConn)) {
 	this.beforeClose = hookFunc
 }
 
-func (this*server) wsHandler(resp http.ResponseWriter, req *http.Request) {
+func (this *server) wsHandler(resp http.ResponseWriter, req *http.Request) {
 
 	wsSocket, err := wsUpgrader.Upgrade(resp, req, nil)
 	if err != nil {

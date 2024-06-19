@@ -10,11 +10,16 @@ import (
 var ViewWidth = 5
 var ViewHeight = 5
 
-//是否在视野范围内
+// ArmyIsInView 判断坐标（x,y）是否在视野范围内
 func ArmyIsInView(rid, x, y int) bool {
 	unionId := union.GetUnionId(rid)
-	for i := util.MaxInt(x-ViewWidth, 0); i < util.MinInt(x+ViewWidth, global.MapWith); i++ {
-		for j := util.MaxInt(y-ViewHeight, 0); j < util.MinInt(y+ViewHeight, global.MapHeight); j++ {
+	xMin := util.MaxInt(x-ViewWidth, 0)
+	xMax := util.MinInt(x+ViewWidth, global.MapWith)
+	yMin := util.MaxInt(y-ViewHeight, 0)
+	yMax := util.MinInt(y+ViewHeight, global.MapHeight)
+
+	for i := xMin; i < xMax; i++ {
+		for j := yMin; j < yMax; j++ {
 			build, ok := mgr.RBMgr.PositionBuild(i, j)
 			if ok {
 				tUnionId := union.GetUnionId(build.RId)

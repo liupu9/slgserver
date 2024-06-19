@@ -7,14 +7,18 @@ import (
 	"go.uber.org/zap"
 )
 
+// HandlerFunc 消息处理
 type HandlerFunc func(req *WsMsgReq, rsp *WsMsgRsp)
+
+// MiddlewareFunc 中间件
 type MiddlewareFunc func(HandlerFunc) HandlerFunc
 
+// Group 路由分组（固定前缀）
 type Group struct {
 	prefix     string                      // 前缀
 	hMap       map[string]HandlerFunc      // 消息处理器
 	hMapMidd   map[string][]MiddlewareFunc // 中间件处理器
-	middleware []MiddlewareFunc            // 中间件
+	middleware []MiddlewareFunc            // 中间件数组
 }
 
 func (this *Group) AddRouter(name string, handlerFunc HandlerFunc, middleware ...MiddlewareFunc) {
@@ -58,12 +62,14 @@ func (this *Group) exec(name string, req *WsMsgReq, rsp *WsMsgRsp) {
 	}
 }
 
+// Router 路由，包含多个路由分组
 type Router struct {
 	groups []*Group
 }
 
 func (this *Router) Group(prefix string) *Group {
-	g := &Group{prefix: prefix,
+	g := &Group{
+		prefix:   prefix,
 		hMap:     make(map[string]HandlerFunc),
 		hMapMidd: make(map[string][]MiddlewareFunc),
 	}
