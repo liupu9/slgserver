@@ -17,8 +17,9 @@ func RoleNickName(rid int) string {
 	return ""
 }
 
+// roleMgr 角色管理器
 type roleMgr struct {
-	mutex  sync.RWMutex
+	mutex sync.RWMutex
 	roles map[int]*model.Role
 }
 
@@ -26,7 +27,7 @@ var RMgr = &roleMgr{
 	roles: make(map[int]*model.Role),
 }
 
-func (this*roleMgr) Get(rid int) (*model.Role, bool){
+func (this *roleMgr) Get(rid int) (*model.Role, bool) {
 	this.mutex.RLock()
 	r, ok := this.roles[rid]
 	this.mutex.RUnlock()
@@ -42,9 +43,8 @@ func (this*roleMgr) Get(rid int) (*model.Role, bool){
 		this.roles[rid] = m
 		this.mutex.Unlock()
 		return m, true
-	}else{
+	} else {
 		log.DefaultLog.Warn("db error", zap.Error(err), zap.Int("rid", rid))
 		return nil, false
 	}
 }
-

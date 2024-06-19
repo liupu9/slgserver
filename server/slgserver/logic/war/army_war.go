@@ -81,7 +81,7 @@ func NewEmptyWar(attack *model.Army) *model.WarReport {
 	return wr
 }
 
-//简单战斗
+// 简单战斗
 func NewBattle(attackArmy *model.Army, armyLogic ILogic.IArmyLogic) *Battle {
 	battle := Battle{
 		attackArmy: attackArmy,
@@ -91,6 +91,7 @@ func NewBattle(attackArmy *model.Army, armyLogic ILogic.IArmyLogic) *Battle {
 	return &battle
 }
 
+// Battle 战斗
 type Battle struct {
 	IArmyLogic ILogic.IArmyLogic
 	attackArmy *model.Army

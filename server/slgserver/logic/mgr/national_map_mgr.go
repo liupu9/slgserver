@@ -15,23 +15,18 @@ import (
 	"go.uber.org/zap"
 )
 
-
 const ScanWith = 3
 const ScanHeight = 3
-
-
 
 type NMArray struct {
 	arr []model.NationalMap
 }
 
-
 type mapData struct {
-	Width	int 			`json:"w"`
-	Height	int				`json:"h"`
-	List	[][]int			`json:"list"`
+	Width  int     `json:"w"`
+	Height int     `json:"h"`
+	List   [][]int `json:"list"`
 }
-
 
 func Distance(begX, begY, endX, endY int) float64 {
 	w := math.Abs(float64(endX - begX))
@@ -41,10 +36,11 @@ func Distance(begX, begY, endX, endY int) float64 {
 
 func TravelTime(speed, begX, begY, endX, endY int) int {
 	dis := Distance(begX, begY, endX, endY)
-	t := dis / float64(speed)*100000000
+	t := dis / float64(speed) * 100000000
 	return int(t)
 }
 
+// NationalMapMgr 国家地图管理器
 type NationalMapMgr struct {
 	mutex    sync.RWMutex
 	conf     map[int]model.NationalMap
@@ -56,7 +52,7 @@ var NMMgr = &NationalMapMgr{
 	sysBuild: make(map[int]model.NationalMap),
 }
 
-func (this*NationalMapMgr) Load() {
+func (this *NationalMapMgr) Load() {
 
 	fileName := config.File.MustValue("logic", "map_data",
 		"./data/conf/map.json")
@@ -81,10 +77,10 @@ func (this*NationalMapMgr) Load() {
 	for i, v := range m.List {
 		t := int8(v[0])
 		l := int8(v[1])
-		d := model.NationalMap{Y: i/ global.MapHeight, X: i% global.MapWith, MId: i, Type: t, Level: l}
+		d := model.NationalMap{Y: i / global.MapHeight, X: i % global.MapWith, MId: i, Type: t, Level: l}
 		this.conf[i] = d
-		if	d.Type == model.MapBuildSysCity ||
-			d.Type == model.MapBuildSysFortress{
+		if d.Type == model.MapBuildSysCity ||
+			d.Type == model.MapBuildSysFortress {
 			this.sysBuild[i] = d
 		}
 	}
@@ -93,40 +89,40 @@ func (this*NationalMapMgr) Load() {
 
 }
 
-func (this*NationalMapMgr) IsCanBuild(x, y int) bool {
+func (this *NationalMapMgr) IsCanBuild(x, y int) bool {
 	posIndex := global.ToPosition(x, y)
 	this.mutex.RLock()
 	defer this.mutex.RUnlock()
-	c,ok := this.conf[posIndex]
+	c, ok := this.conf[posIndex]
 	if ok {
-		if c.Type == 0{
+		if c.Type == 0 {
 			return false
-		}else {
+		} else {
 			return true
 		}
-	}else {
+	} else {
 		return false
 	}
 }
 
-func (this*NationalMapMgr) IsCanBuildCity(x, y int) bool {
+func (this *NationalMapMgr) IsCanBuildCity(x, y int) bool {
 
 	//系统城池附近5格不能有玩家城池
 	for _, nationalMap := range this.sysBuild {
 		if nationalMap.Type == model.MapBuildSysCity {
-			if x >= nationalMap.X - 5 && x <= nationalMap.X + 5 &&
-				y >= nationalMap.Y - 5 && y <= nationalMap.Y + 5{
+			if x >= nationalMap.X-5 && x <= nationalMap.X+5 &&
+				y >= nationalMap.Y-5 && y <= nationalMap.Y+5 {
 				return false
 			}
 		}
 	}
 
-	for i := x-2; i <= x+2; i++ {
+	for i := x - 2; i <= x+2; i++ {
 		if i < 0 || i > global.MapWith {
 			return false
 		}
 
-		for j := y-2; j <= y+2; j++ {
+		for j := y - 2; j <= y+2; j++ {
 			if j < 0 || j > global.MapHeight {
 				return false
 			}
@@ -134,14 +130,14 @@ func (this*NationalMapMgr) IsCanBuildCity(x, y int) bool {
 
 		if this.IsCanBuild(x, y) == false ||
 			RBMgr.IsEmpty(x, y) == false ||
-			RCMgr.IsEmpty(x, y) == false{
+			RCMgr.IsEmpty(x, y) == false {
 			return false
 		}
 	}
 	return true
 }
 
-func (this*NationalMapMgr) MapResTypeLevel(x, y int) (bool, int8, int8) {
+func (this *NationalMapMgr) MapResTypeLevel(x, y int) (bool, int8, int8) {
 	n, ok := this.PositionBuild(x, y)
 	if ok {
 		return true, n.Type, n.Level
@@ -149,7 +145,7 @@ func (this*NationalMapMgr) MapResTypeLevel(x, y int) (bool, int8, int8) {
 	return false, 0, 0
 }
 
-func (this*NationalMapMgr) PositionBuild(x, y int) (model.NationalMap, bool) {
+func (this *NationalMapMgr) PositionBuild(x, y int) (model.NationalMap, bool) {
 	posIndex := global.ToPosition(x, y)
 	this.mutex.RLock()
 	defer this.mutex.RUnlock()
@@ -157,7 +153,7 @@ func (this*NationalMapMgr) PositionBuild(x, y int) (model.NationalMap, bool) {
 	return b, ok
 }
 
-func (this*NationalMapMgr) Scan(x, y int) []model.NationalMap {
+func (this *NationalMapMgr) Scan(x, y int) []model.NationalMap {
 	this.mutex.RLock()
 	defer this.mutex.RUnlock()
 
@@ -167,7 +163,7 @@ func (this*NationalMapMgr) Scan(x, y int) []model.NationalMap {
 	minY := util.MaxInt(0, y-ScanHeight)
 	maxY := util.MinInt(40, y+ScanHeight)
 
-	c := (maxX-minX+1)*(maxY-minY+1)
+	c := (maxX - minX + 1) * (maxY - minY + 1)
 	r := make([]model.NationalMap, c)
 
 	index := 0

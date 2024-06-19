@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// roleResMgr 角色资源管理器
 type roleResMgr struct {
 	mutex    sync.RWMutex
 	rolesRes map[int]*model.RoleRes
@@ -23,7 +24,7 @@ var RResMgr = &roleResMgr{
 	rolesRes: make(map[int]*model.RoleRes),
 }
 
-//获取产量
+// 获取产量
 func GetYield(rid int) model.Yield {
 	by := RBMgr.GetYield(rid)
 	cy := RFMgr.GetYield(rid)
@@ -38,7 +39,7 @@ func GetYield(rid int) model.Yield {
 	return y
 }
 
-//获取仓库容量
+// 获取仓库容量
 func GetDepotCapacity(rid int) int {
 	return RFMgr.GetDepotCapacity(rid) + static_conf.Basic.Role.DepotCapacity
 }
@@ -127,7 +128,7 @@ func (this *roleResMgr) TryUseNeed(rid int, need facility.NeedRes) int {
 	}
 }
 
-//政令是否足够
+// 政令是否足够
 func (this *roleResMgr) DecreeIsEnough(rid int, cost int) bool {
 
 	this.mutex.RLock()
@@ -164,7 +165,7 @@ func (this *roleResMgr) TryUseDecree(rid int, decree int) bool {
 	}
 }
 
-//金币是否足够
+// 金币是否足够
 func (this *roleResMgr) GoldIsEnough(rid int, cost int) bool {
 
 	this.mutex.RLock()

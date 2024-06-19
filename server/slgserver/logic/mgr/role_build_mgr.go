@@ -14,37 +14,36 @@ import (
 	"go.uber.org/zap"
 )
 
-
+// roleBuildMgr 角色建筑管理器
 type roleBuildMgr struct {
-	baseMutex 		sync.RWMutex
-	giveUpMutex 	sync.RWMutex
-	destroyMutex 	sync.RWMutex
-	dbRB  			map[int]*model.MapRoleBuild    	//key:dbId
-	posRB 			map[int]*model.MapRoleBuild    	//key:posId
-	roleRB 			map[int][]*model.MapRoleBuild 	//key:roleId
-	giveUpRB 		map[int64]map[int]*model.MapRoleBuild //key:time
-	destroyRB 		map[int64]map[int]*model.MapRoleBuild //key:time
+	baseMutex    sync.RWMutex
+	giveUpMutex  sync.RWMutex
+	destroyMutex sync.RWMutex
+	dbRB         map[int]*model.MapRoleBuild           //key:dbId
+	posRB        map[int]*model.MapRoleBuild           //key:posId
+	roleRB       map[int][]*model.MapRoleBuild         //key:roleId
+	giveUpRB     map[int64]map[int]*model.MapRoleBuild //key:time
+	destroyRB    map[int64]map[int]*model.MapRoleBuild //key:time
 
 }
 
-
 var RBMgr = &roleBuildMgr{
-	dbRB: make(map[int]*model.MapRoleBuild),
-	posRB: make(map[int]*model.MapRoleBuild),
-	roleRB: make(map[int][]*model.MapRoleBuild),
-	giveUpRB: make(map[int64]map[int]*model.MapRoleBuild),
+	dbRB:      make(map[int]*model.MapRoleBuild),
+	posRB:     make(map[int]*model.MapRoleBuild),
+	roleRB:    make(map[int][]*model.MapRoleBuild),
+	giveUpRB:  make(map[int64]map[int]*model.MapRoleBuild),
 	destroyRB: make(map[int64]map[int]*model.MapRoleBuild),
 }
 
-func (this*roleBuildMgr) Load() {
+func (this *roleBuildMgr) Load() {
 
 	if total, err := db.MasterDB.Where("type = ? or type = ?",
 		model.MapBuildSysCity,
-		model.MapBuildSysFortress).Count(new(model.MapRoleBuild)); err != nil{
+		model.MapBuildSysFortress).Count(new(model.MapRoleBuild)); err != nil {
 		log.DefaultLog.Panic("db error")
-	}else{
+	} else {
 		//初始化系统建筑到数据库
-		if int64(len(NMMgr.sysBuild)) != total{
+		if int64(len(NMMgr.sysBuild)) != total {
 			db.MasterDB.Where("type = ? or type = ?",
 				model.MapBuildSysCity,
 				model.MapBuildSysFortress).Delete(new(model.MapRoleBuild))
@@ -63,7 +62,6 @@ func (this*roleBuildMgr) Load() {
 		}
 	}
 
-
 	err := db.MasterDB.Find(this.dbRB)
 	if err != nil {
 		log.DefaultLog.Error("roleBuildMgr load role_build table error", zap.Error(err))
@@ -78,7 +76,7 @@ func (this*roleBuildMgr) Load() {
 		//恢复正在放弃的土地
 		if v.GiveUpTime != 0 {
 			_, ok := this.giveUpRB[v.GiveUpTime]
-			if ok == false{
+			if ok == false {
 				this.giveUpRB[v.GiveUpTime] = make(map[int]*model.MapRoleBuild)
 			}
 			this.giveUpRB[v.GiveUpTime][v.Id] = v
@@ -89,9 +87,9 @@ func (this*roleBuildMgr) Load() {
 			t := v.EndTime.Unix()
 			if curTime >= t {
 				v.ConvertToRes()
-			}else{
+			} else {
 				_, ok := this.destroyRB[t]
-				if ok == false{
+				if ok == false {
 					this.destroyRB[t] = make(map[int]*model.MapRoleBuild)
 				}
 				this.destroyRB[t][v.Id] = v
@@ -100,14 +98,14 @@ func (this*roleBuildMgr) Load() {
 
 		posId := global.ToPosition(v.X, v.Y)
 		this.posRB[posId] = v
-		_,ok := this.roleRB[v.RId]
-		if ok == false{
+		_, ok := this.roleRB[v.RId]
+		if ok == false {
 			this.roleRB[v.RId] = make([]*model.MapRoleBuild, 0)
 		}
 		this.roleRB[v.RId] = append(this.roleRB[v.RId], v)
 
 		//过滤掉到了放弃时间的领地
-		if v.GiveUpTime != 0 && v.GiveUpTime <= curTime{
+		if v.GiveUpTime != 0 && v.GiveUpTime <= curTime {
 			this.RemoveFromRole(v)
 		}
 
@@ -115,14 +113,14 @@ func (this*roleBuildMgr) Load() {
 
 }
 
-//检测正在放弃的土地是否到期了
-func (this*roleBuildMgr) CheckGiveUp() []int {
+// 检测正在放弃的土地是否到期了
+func (this *roleBuildMgr) CheckGiveUp() []int {
 	var ret []int
 	var builds []*model.MapRoleBuild
 
 	curTime := time.Now().Unix()
 	this.giveUpMutex.Lock()
-	for i := curTime-10; i <= curTime ; i++ {
+	for i := curTime - 10; i <= curTime; i++ {
 		gs, ok := this.giveUpRB[i]
 		if ok {
 			for _, g := range gs {
@@ -140,14 +138,14 @@ func (this*roleBuildMgr) CheckGiveUp() []int {
 	return ret
 }
 
-//检测正在拆除的建筑是否到期
-func (this*roleBuildMgr) CheckDestroy() []int {
+// 检测正在拆除的建筑是否到期
+func (this *roleBuildMgr) CheckDestroy() []int {
 	var ret []int
 	var builds []*model.MapRoleBuild
 
 	curTime := time.Now().Unix()
 	this.destroyMutex.Lock()
-	for i := curTime-10; i <= curTime ; i++ {
+	for i := curTime - 10; i <= curTime; i++ {
 		gs, ok := this.destroyRB[i]
 		if ok {
 			for _, g := range gs {
@@ -164,10 +162,11 @@ func (this*roleBuildMgr) CheckDestroy() []int {
 	}
 	return ret
 }
+
 /*
 该位置是否被角色占领
 */
-func (this*roleBuildMgr) IsEmpty(x, y int) bool {
+func (this *roleBuildMgr) IsEmpty(x, y int) bool {
 	this.baseMutex.RLock()
 	defer this.baseMutex.RUnlock()
 	posId := global.ToPosition(x, y)
@@ -175,35 +174,34 @@ func (this*roleBuildMgr) IsEmpty(x, y int) bool {
 	return !ok
 }
 
-func (this*roleBuildMgr) PositionBuild(x, y int) (*model.MapRoleBuild, bool) {
+func (this *roleBuildMgr) PositionBuild(x, y int) (*model.MapRoleBuild, bool) {
 	this.baseMutex.RLock()
 	defer this.baseMutex.RUnlock()
 	posId := global.ToPosition(x, y)
-	b,ok := this.posRB[posId]
+	b, ok := this.posRB[posId]
 	if ok {
 		return b, ok
-	}else{
+	} else {
 		return nil, false
 	}
 }
 
-func (this*roleBuildMgr) RoleFortressCnt(rid int)int{
+func (this *roleBuildMgr) RoleFortressCnt(rid int) int {
 	bs, ok := this.GetRoleBuild(rid)
 	cnt := 0
 	if ok == false {
 		return 0
-	}else{
+	} else {
 		for _, b := range bs {
-			if b.IsRoleFortress(){
-				cnt +=1
+			if b.IsRoleFortress() {
+				cnt += 1
 			}
 		}
 	}
 	return cnt
 }
 
-
-func (this*roleBuildMgr) AddBuild(rid, x, y int) (*model.MapRoleBuild, bool) {
+func (this *roleBuildMgr) AddBuild(rid, x, y int) (*model.MapRoleBuild, bool) {
 
 	posId := global.ToPosition(x, y)
 	this.baseMutex.Lock()
@@ -212,14 +210,14 @@ func (this*roleBuildMgr) AddBuild(rid, x, y int) (*model.MapRoleBuild, bool) {
 	if ok {
 		rb.RId = rid
 		this.baseMutex.Lock()
-		if _, ok := this.roleRB[rid]; ok == false{
+		if _, ok := this.roleRB[rid]; ok == false {
 			this.roleRB[rid] = make([]*model.MapRoleBuild, 0)
 		}
 		this.roleRB[rid] = append(this.roleRB[rid], rb)
 		this.baseMutex.Unlock()
 		return rb, true
 
-	}else{
+	} else {
 
 		if b, ok := NMMgr.PositionBuild(x, y); ok {
 			if cfg, _ := static_conf.MapBuildConf.BuildConfig(b.Type, b.Level); cfg != nil {
@@ -231,17 +229,17 @@ func (this*roleBuildMgr) AddBuild(rid, x, y int) (*model.MapRoleBuild, bool) {
 				}
 				rb.Init()
 
-				if _, err := db.MasterDB.Table(model.MapRoleBuild{}).Insert(rb); err == nil{
+				if _, err := db.MasterDB.Table(model.MapRoleBuild{}).Insert(rb); err == nil {
 					this.baseMutex.Lock()
 					this.posRB[posId] = rb
 					this.dbRB[rb.Id] = rb
-					if _, ok := this.roleRB[rid]; ok == false{
+					if _, ok := this.roleRB[rid]; ok == false {
 						this.roleRB[rid] = make([]*model.MapRoleBuild, 0)
 					}
 					this.roleRB[rid] = append(this.roleRB[rid], rb)
 					this.baseMutex.Unlock()
 					return rb, true
-				}else{
+				} else {
 					log.DefaultLog.Warn("db error", zap.Error(err))
 				}
 			}
@@ -250,12 +248,12 @@ func (this*roleBuildMgr) AddBuild(rid, x, y int) (*model.MapRoleBuild, bool) {
 	return nil, false
 }
 
-func (this*roleBuildMgr) RemoveFromRole(build *model.MapRoleBuild)  {
+func (this *roleBuildMgr) RemoveFromRole(build *model.MapRoleBuild) {
 	this.baseMutex.Lock()
-	rb,ok := this.roleRB[build.RId]
+	rb, ok := this.roleRB[build.RId]
 	if ok {
 		for i, v := range rb {
-			if v.Id == build.Id{
+			if v.Id == build.Id {
 				this.roleRB[build.RId] = append(rb[:i], rb[i+1:]...)
 				break
 			}
@@ -266,16 +264,15 @@ func (this*roleBuildMgr) RemoveFromRole(build *model.MapRoleBuild)  {
 	//移除放弃事件
 	t := build.GiveUpTime
 	this.giveUpMutex.Lock()
-	if ms, ok := this.giveUpRB[t]; ok{
+	if ms, ok := this.giveUpRB[t]; ok {
 		delete(ms, build.Id)
 	}
 	this.giveUpMutex.Unlock()
 
-
 	//移除拆除事件
 	t = build.EndTime.Unix()
 	this.destroyMutex.Lock()
-	if ms, ok := this.destroyRB[t]; ok{
+	if ms, ok := this.destroyRB[t]; ok {
 		delete(ms, build.Id)
 	}
 	this.destroyMutex.Unlock()
@@ -284,23 +281,23 @@ func (this*roleBuildMgr) RemoveFromRole(build *model.MapRoleBuild)  {
 	build.SyncExecute()
 }
 
-func (this*roleBuildMgr) GetRoleBuild(rid int) ([]*model.MapRoleBuild, bool) {
+func (this *roleBuildMgr) GetRoleBuild(rid int) ([]*model.MapRoleBuild, bool) {
 	this.baseMutex.RLock()
 	defer this.baseMutex.RUnlock()
 	ra, ok := this.roleRB[rid]
 	return ra, ok
 }
 
-func (this*roleBuildMgr) BuildCnt(rid int) int {
+func (this *roleBuildMgr) BuildCnt(rid int) int {
 	bs, ok := this.GetRoleBuild(rid)
 	if ok {
 		return len(bs)
-	}else{
+	} else {
 		return 0
 	}
 }
 
-func (this*roleBuildMgr) Scan(x, y int) []*model.MapRoleBuild {
+func (this *roleBuildMgr) Scan(x, y int) []*model.MapRoleBuild {
 	if x < 0 || x >= global.MapWith || y < 0 || y >= global.MapHeight {
 		return nil
 	}
@@ -327,11 +324,10 @@ func (this*roleBuildMgr) Scan(x, y int) []*model.MapRoleBuild {
 	return rb
 }
 
-func (this*roleBuildMgr) ScanBlock(x, y, length int) []*model.MapRoleBuild {
+func (this *roleBuildMgr) ScanBlock(x, y, length int) []*model.MapRoleBuild {
 	if x < 0 || x >= global.MapWith || y < 0 || y >= global.MapHeight {
 		return nil
 	}
-
 
 	this.baseMutex.RLock()
 	defer this.baseMutex.RUnlock()
@@ -353,16 +349,16 @@ func (this*roleBuildMgr) ScanBlock(x, y, length int) []*model.MapRoleBuild {
 	return rb
 }
 
-func (this*roleBuildMgr) BuildIsRId(x, y, rid int) bool {
+func (this *roleBuildMgr) BuildIsRId(x, y, rid int) bool {
 	b, ok := this.PositionBuild(x, y)
 	if ok {
 		return b.RId == rid
-	}else{
+	} else {
 		return false
 	}
 }
 
-func (this*roleBuildMgr) GetYield(rid int)model.Yield{
+func (this *roleBuildMgr) GetYield(rid int) model.Yield {
 	builds, ok := this.GetRoleBuild(rid)
 	var y model.Yield
 	if ok {
@@ -376,9 +372,9 @@ func (this*roleBuildMgr) GetYield(rid int)model.Yield{
 	return y
 }
 
-func (this* roleBuildMgr) GiveUp(x, y int) int {
+func (this *roleBuildMgr) GiveUp(x, y int) int {
 	b, ok := this.PositionBuild(x, y)
-	if ok == false{
+	if ok == false {
 		return constant.CannotGiveUp
 	}
 
@@ -386,7 +382,7 @@ func (this* roleBuildMgr) GiveUp(x, y int) int {
 		return constant.BuildWarFree
 	}
 
-	if b.GiveUpTime > 0{
+	if b.GiveUpTime > 0 {
 		return constant.BuildGiveUpAlready
 	}
 
@@ -404,7 +400,7 @@ func (this* roleBuildMgr) GiveUp(x, y int) int {
 	return constant.OK
 }
 
-func (this* roleBuildMgr) Destroy(x, y int) int {
+func (this *roleBuildMgr) Destroy(x, y int) int {
 
 	b, ok := this.PositionBuild(x, y)
 	if ok == false {
@@ -416,7 +412,7 @@ func (this* roleBuildMgr) Destroy(x, y int) int {
 	}
 
 	cfg, ok := static_conf.MapBCConf.BuildConfig(b.Type, b.Level)
-	if ok == false{
+	if ok == false {
 		return constant.InvalidParam
 	}
 
@@ -425,7 +421,7 @@ func (this* roleBuildMgr) Destroy(x, y int) int {
 		return code
 	}
 
-	b.EndTime = time.Now().Add(time.Duration(cfg.Time)*time.Second)
+	b.EndTime = time.Now().Add(time.Duration(cfg.Time) * time.Second)
 	this.destroyMutex.Lock()
 	t := b.EndTime.Unix()
 	_, ok = this.destroyRB[t]

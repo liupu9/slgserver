@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// armyMgr 军队管理器
 type armyMgr struct {
 	mutex        sync.RWMutex
 	armyById     map[int]*model.Army   //key:armyId
@@ -155,7 +156,7 @@ func (this *armyMgr) GetByRId(rid int) ([]*model.Army, bool) {
 	return as, ok
 }
 
-//归属于该位置的军队数量
+// 归属于该位置的军队数量
 func (this *armyMgr) BelongPosArmyCnt(rid int, x, y int) int {
 	cnt := 0
 	armys, ok := this.GetByRId(rid)
@@ -240,7 +241,7 @@ func (this *armyMgr) GetSpeed(army *model.Army) int {
 	return speed + campAdds[0]
 }
 
-//能否已经重复上阵了
+// 能否已经重复上阵了
 func (this *armyMgr) IsRepeat(rid int, cfgId int) bool {
 	armys, ok := this.GetByRId(rid)
 	if ok == false {

@@ -13,17 +13,17 @@ import (
 	"go.uber.org/zap"
 )
 
-
+// roleCityMgr 玩家城市管理器
 type roleCityMgr struct {
-	mutex  sync.RWMutex
-	dbCity map[int]*model.MapRoleCity     //key: cid
-	posCity map[int]*model.MapRoleCity    //key: pos
+	mutex    sync.RWMutex
+	dbCity   map[int]*model.MapRoleCity   //key: cid
+	posCity  map[int]*model.MapRoleCity   //key: pos
 	roleCity map[int][]*model.MapRoleCity //key: rid
 }
 
 var RCMgr = &roleCityMgr{
-	dbCity: make(map[int]*model.MapRoleCity),
-	posCity: make(map[int]*model.MapRoleCity),
+	dbCity:   make(map[int]*model.MapRoleCity),
+	posCity:  make(map[int]*model.MapRoleCity),
 	roleCity: make(map[int][]*model.MapRoleCity),
 }
 
@@ -35,11 +35,11 @@ func GetMaxDurable(cid int) int {
 	return RFMgr.GetMaxDurable(cid) + static_conf.Basic.City.Durable
 }
 
-func GetCityLV(cid int) int8  {
+func GetCityLV(cid int) int8 {
 	return RFMgr.GetCityLV(cid)
 }
 
-func (this*roleCityMgr) Load() {
+func (this *roleCityMgr) Load() {
 
 	err := db.MasterDB.Find(this.dbCity)
 	if err != nil {
@@ -51,7 +51,7 @@ func (this*roleCityMgr) Load() {
 		posId := global.ToPosition(v.X, v.Y)
 		this.posCity[posId] = v
 		_, ok := this.roleCity[v.RId]
-		if ok == false{
+		if ok == false {
 			this.roleCity[v.RId] = make([]*model.MapRoleCity, 0)
 		}
 		this.roleCity[v.RId] = append(this.roleCity[v.RId], v)
@@ -60,13 +60,13 @@ func (this*roleCityMgr) Load() {
 	go this.running()
 }
 
-func (this*roleCityMgr) running() {
+func (this *roleCityMgr) running() {
 	for true {
 		t := static_conf.Basic.City.RecoveryTime
 		time.Sleep(time.Duration(t) * time.Second)
 		this.mutex.RLock()
 		for _, city := range this.dbCity {
-			if city.CurDurable < GetMaxDurable(city.CityId){
+			if city.CurDurable < GetMaxDurable(city.CityId) {
 				city.DurableChange(100)
 				city.SyncExecute()
 			}
@@ -78,7 +78,7 @@ func (this*roleCityMgr) running() {
 /*
 该位置是否被角色建立城池
 */
-func (this*roleCityMgr) IsEmpty(x, y int) bool {
+func (this *roleCityMgr) IsEmpty(x, y int) bool {
 	this.mutex.RLock()
 	defer this.mutex.RUnlock()
 	posId := global.ToPosition(x, y)
@@ -86,15 +86,15 @@ func (this*roleCityMgr) IsEmpty(x, y int) bool {
 	return !ok
 }
 
-func (this*roleCityMgr) PositionCity(x, y int) (*model.MapRoleCity, bool) {
+func (this *roleCityMgr) PositionCity(x, y int) (*model.MapRoleCity, bool) {
 	this.mutex.RLock()
 	defer this.mutex.RUnlock()
 	posId := global.ToPosition(x, y)
-	c,ok := this.posCity[posId]
+	c, ok := this.posCity[posId]
 	return c, ok
 }
 
-func (this*roleCityMgr) Add(city *model.MapRoleCity) {
+func (this *roleCityMgr) Add(city *model.MapRoleCity) {
 
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
@@ -102,13 +102,13 @@ func (this*roleCityMgr) Add(city *model.MapRoleCity) {
 	this.posCity[global.ToPosition(city.X, city.Y)] = city
 
 	_, ok := this.roleCity[city.RId]
-	if ok == false{
+	if ok == false {
 		this.roleCity[city.RId] = make([]*model.MapRoleCity, 0)
 	}
 	this.roleCity[city.RId] = append(this.roleCity[city.RId], city)
 }
 
-func (this*roleCityMgr) Scan(x, y int) []*model.MapRoleCity {
+func (this *roleCityMgr) Scan(x, y int) []*model.MapRoleCity {
 	if x < 0 || x >= global.MapWith || y < 0 || y >= global.MapHeight {
 		return nil
 	}
@@ -134,7 +134,7 @@ func (this*roleCityMgr) Scan(x, y int) []*model.MapRoleCity {
 	return cb
 }
 
-func (this*roleCityMgr) ScanBlock(x, y, length int) []*model.MapRoleCity {
+func (this *roleCityMgr) ScanBlock(x, y, length int) []*model.MapRoleCity {
 	if x < 0 || x >= global.MapWith || y < 0 || y >= global.MapHeight {
 		return nil
 	}
@@ -158,20 +158,20 @@ func (this*roleCityMgr) ScanBlock(x, y, length int) []*model.MapRoleCity {
 	return cb
 }
 
-func (this*roleCityMgr) GetByRId(rid int) ([]*model.MapRoleCity, bool){
+func (this *roleCityMgr) GetByRId(rid int) ([]*model.MapRoleCity, bool) {
 	this.mutex.RLock()
 	r, ok := this.roleCity[rid]
 	this.mutex.RUnlock()
 	return r, ok
 }
 
-func (this*roleCityMgr) GetMainCity(rid int) (*model.MapRoleCity, bool){
+func (this *roleCityMgr) GetMainCity(rid int) (*model.MapRoleCity, bool) {
 	citys, ok := this.GetByRId(rid)
 	if ok == false {
 		return nil, false
-	}else{
+	} else {
 		for _, city := range citys {
-			if city.IsMain == 1{
+			if city.IsMain == 1 {
 				return city, true
 			}
 		}
@@ -179,7 +179,7 @@ func (this*roleCityMgr) GetMainCity(rid int) (*model.MapRoleCity, bool){
 	return nil, false
 }
 
-func (this*roleCityMgr) Get(cid int) (*model.MapRoleCity, bool){
+func (this *roleCityMgr) Get(cid int) (*model.MapRoleCity, bool) {
 	this.mutex.RLock()
 	r, ok := this.dbCity[cid]
 	this.mutex.RUnlock()
@@ -188,10 +188,9 @@ func (this*roleCityMgr) Get(cid int) (*model.MapRoleCity, bool){
 		return r, true
 	}
 
-
 	r = &model.MapRoleCity{}
 	ok, err := db.MasterDB.Table(r).Where("cityId=?", cid).Get(r)
-	if err != nil{
+	if err != nil {
 		log.DefaultLog.Warn("db error", zap.Error(err))
 	}
 
@@ -200,7 +199,7 @@ func (this*roleCityMgr) Get(cid int) (*model.MapRoleCity, bool){
 		this.dbCity[cid] = r
 		this.mutex.Unlock()
 		return r, true
-	}else{
+	} else {
 		return nil, false
 	}
 }

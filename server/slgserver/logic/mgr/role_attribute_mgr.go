@@ -9,8 +9,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// roleAttributeMgr 角色属性管理器
 type roleAttributeMgr struct {
-	mutex  sync.RWMutex
+	mutex     sync.RWMutex
 	attribute map[int]*model.RoleAttribute //key:rid
 }
 
@@ -18,7 +19,7 @@ var RAttrMgr = &roleAttributeMgr{
 	attribute: make(map[int]*model.RoleAttribute),
 }
 
-func (this*roleAttributeMgr) Load() {
+func (this *roleAttributeMgr) Load() {
 	//加载
 	t := make(map[int]*model.RoleAttribute)
 	err := db.MasterDB.Find(t)
@@ -27,7 +28,7 @@ func (this*roleAttributeMgr) Load() {
 	}
 
 	//获取联盟id
-	for _, v:= range t {
+	for _, v := range t {
 		this.attribute[v.RId] = v
 	}
 
@@ -37,9 +38,9 @@ func (this*roleAttributeMgr) Load() {
 			attr, ok := this.attribute[rid]
 			if ok {
 				attr.UnionId = c.Id
-			}else{
+			} else {
 				attr := this.create(rid)
-				if attr != nil{
+				if attr != nil {
 					attr.UnionId = c.Id
 				}
 			}
@@ -47,8 +48,7 @@ func (this*roleAttributeMgr) Load() {
 	}
 }
 
-
-func (this*roleAttributeMgr) Get(rid int) (*model.RoleAttribute, bool){
+func (this *roleAttributeMgr) Get(rid int) (*model.RoleAttribute, bool) {
 
 	this.mutex.RLock()
 	r, ok := this.attribute[rid]
@@ -56,16 +56,16 @@ func (this*roleAttributeMgr) Get(rid int) (*model.RoleAttribute, bool){
 
 	if ok {
 		return r, true
-	}else {
+	} else {
 		return nil, false
 	}
 }
 
-func (this*roleAttributeMgr) TryCreate(rid int) (*model.RoleAttribute, bool){
+func (this *roleAttributeMgr) TryCreate(rid int) (*model.RoleAttribute, bool) {
 	attr, ok := this.Get(rid)
 	if ok {
 		return attr, true
-	}else{
+	} else {
 		this.mutex.Lock()
 		defer this.mutex.Unlock()
 		attr := this.create(rid)
@@ -73,19 +73,18 @@ func (this*roleAttributeMgr) TryCreate(rid int) (*model.RoleAttribute, bool){
 	}
 }
 
-func (this*roleAttributeMgr) create(rid int) *model.RoleAttribute {
+func (this *roleAttributeMgr) create(rid int) *model.RoleAttribute {
 	roleAttr := &model.RoleAttribute{RId: rid, ParentId: 0, UnionId: 0}
-	if _ , err := db.MasterDB.Insert(roleAttr); err != nil {
+	if _, err := db.MasterDB.Insert(roleAttr); err != nil {
 		log.DefaultLog.Error("insert RoleAttribute error", zap.Error(err))
 		return nil
-	}else{
+	} else {
 		this.attribute[rid] = roleAttr
 		return roleAttr
 	}
 }
 
-
-func (this*roleAttributeMgr) IsHasUnion(rid int) bool{
+func (this *roleAttributeMgr) IsHasUnion(rid int) bool {
 
 	this.mutex.RLock()
 	r, ok := this.attribute[rid]
@@ -93,12 +92,12 @@ func (this*roleAttributeMgr) IsHasUnion(rid int) bool{
 
 	if ok {
 		return r.UnionId != 0
-	}else {
-		return  false
+	} else {
+		return false
 	}
 }
 
-func (this*roleAttributeMgr) UnionId(rid int) int{
+func (this *roleAttributeMgr) UnionId(rid int) int {
 
 	this.mutex.RLock()
 	r, ok := this.attribute[rid]
@@ -106,12 +105,12 @@ func (this*roleAttributeMgr) UnionId(rid int) int{
 
 	if ok {
 		return r.UnionId
-	}else {
-		return  0
+	} else {
+		return 0
 	}
 }
 
-func (this*roleAttributeMgr) List() []*model.RoleAttribute {
+func (this *roleAttributeMgr) List() []*model.RoleAttribute {
 	this.mutex.RLock()
 	defer this.mutex.RUnlock()
 	ret := make([]*model.RoleAttribute, 0)
@@ -120,4 +119,3 @@ func (this*roleAttributeMgr) List() []*model.RoleAttribute {
 	}
 	return ret
 }
-
